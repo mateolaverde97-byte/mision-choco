@@ -865,7 +865,7 @@ function demoDocs(){
 
 
 /* ---------- guardado en línea (Google Sheets vía Apps Script) ---------- */
-const API = ''.indexOf('http') === 0 ? '' : '';
+const API = 'https://script.google.com/macros/s/AKfycbwEtqPdFTLqYf36yDgC1T_gGqi36h0q3rdnahsdFB3RQV_mTRygQBTDva1oRwKOuxc/exec'.indexOf('http') === 0 ? 'https://script.google.com/macros/s/AKfycbwEtqPdFTLqYf36yDgC1T_gGqi36h0q3rdnahsdFB3RQV_mTRygQBTDva1oRwKOuxc/exec' : '';
 const SYNC = {q:{}, t:null, state:'', last:0};
 function payloadFor(id){
   const info = unitInfo(id), D = ST.drafts[id]; if(!info || !D) return null;
