@@ -271,6 +271,8 @@ textarea{min-height:88px;resize:vertical;line-height:1.4}
 .av .dmeta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px;font-weight:600;font-size:14px}
 @media (max-width:640px){.av .teamsbar{grid-template-columns:repeat(5,minmax(70px,1fr));overflow-x:auto}.av .tb b{font-size:20px}}
 .ghost{background:none;border:0;padding:6px 8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#6b645d;text-decoration:underline;min-height:36px}
+.sync{font-size:12.5px;font-weight:700;letter-spacing:.02em}.sync.ok{color:#1E8E55}.sync.wait{color:#6b645d}.sync.err{color:#D63A39}
+.livebar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;border:2px solid var(--ink);background:var(--lime);padding:8px 12px;font-weight:700;font-size:14px}
 </style>
 </head>
 <body>
@@ -562,7 +564,7 @@ function teamV(){
   const logi = SP.filter(s => s.day === tab && (s.logi || []).includes(t)).map(s =>
     '<div class="logi"><b>Apoyo logístico · ' + esc(s.title) + '.</b> No lleva propuesta. Pregunta a Mateo cómo apoyar con el montaje' + (s.id === 'aposento' ? (t === 3 ? ' y el refrigerio del receso (parte del equipo: <span class="tbc">por confirmar</span> quiénes)' : ' y el refrigerio del receso') : '') + '.</div>').join('');
   return '<main>' + topbar('<button class="switch" data-act="home">Cambiar de equipo</button>') + '<div class="wrap">' +
-    '<header class="head"><span class="pill wide">Equipo ' + t + '</span><h1 class="disp">' + esc(T.lider) + '</h1><span class="role wide">Líder · ' + N + ' propuestas</span></header>' +
+    '<header class="head"><span class="pill wide">Equipo ' + t + '</span><span class="sync ' + SYNC.state + '" data-sync style="margin-left:10px">' + syncText() + '</span><h1 class="disp">' + esc(T.lider) + '</h1><span class="role wide">Líder · ' + N + ' propuestas</span></header>' +
     '<section class="progress"><h3>Tu avance</h3><div class="big-num">' + sentN + ' de ' + N + ' enviadas</div><div class="seg" style="margin-top:10px" aria-hidden="true">' +
     seg.map(s => '<i style="width:' + pct(s[0]) + ';background:' + s[1] + '"></i>').join('') + '</div><div class="legend">' +
     seg.filter(s => s[0]).map(s => '<span style="--c:' + s[1] + '">' + s[0] + ' ' + s[2].toLowerCase() + '</span>').join('') + '</div>' +
@@ -643,7 +645,7 @@ function fichaV(){
 
     '<div class="vbox' + (v.E.length ? '' : ' ready') + '" id="vbox">' + vboxHTML(v) + '</div>' +
     '<div class="btnrow" style="margin-bottom:6px"><button class="btn go" data-act="back" style="flex:1">Guardar y volver</button></div>' +
-    '<p class="help" style="margin-bottom:0">Se guarda sola en este celular. El envío a Mateo se hace una sola vez, desde “Mis espacios”, con todas tus fichas.</p></div>' +
+    '<p class="help" style="margin-bottom:0"><span class="sync ' + SYNC.state + '" data-sync>' + syncText() + '</span></p><p class="help" style="margin-bottom:0">' + (API ? 'Se guarda sola en línea y en este celular. Mateo ve tu avance. ' : 'Se guarda sola en este celular. ') + 'El envío a Mateo se hace una sola vez, desde “Mis espacios”, con todas tus fichas.</p></div>' +
     '<div class="foot">' + bar() + '<p class="credit">¿Dudas? Pregunta a Mateo Laverde.</p></div></main>';
 }
 
@@ -654,9 +656,14 @@ function buildDocs(){
   if(AV.demo && DEMODOCS) return (DOCS = DEMODOCS);
   const o = {};
   Object.keys(ST.pool || {}).forEach(id => { o[id] = ST.pool[id]; });
+  (LIVE.rows || []).forEach(r => {
+    if(!r.p || !unitInfo(r.id) || !(String(r.p.idea || '').trim() || (r.p.mm || []).length || (r.p.ma || []).length)) return;
+    const ex = o[r.id]; if(ex && ex.ts > r.ts) return;
+    o[r.id] = {t:r.p.t, u:r.p.u, rev:r.rev, ts:r.estado === 'enviada' ? r.p.ts : r.ts, recv:r.ts, late:r.p.late || 0, d:r.p, estado:r.estado};
+  });
   Object.keys(ST.sent || {}).forEach(id => {
     const s = ST.sent[id]; if(!s || !s.p || !unitInfo(id)) return;
-    const ex = o[id]; if(ex && ex.rev > s.rev) return;
+    const ex = o[id]; if(ex && (ex.rev > s.rev || ex.estado)) return;
     o[id] = {t:s.p.t, u:s.p.u, rev:s.rev, ts:s.ts, recv:s.ts, late:s.p.late || 0, d:s.p};
   });
   return (DOCS = o);
@@ -690,6 +697,7 @@ function alertsFor(id){
   return out;
 }
 const lvOf = id => { if(!DOCS[id]) return 'none'; const a = alertsFor(id); return a.some(x => x[0] === 'bad') ? 'bad' : a.some(x => x[0] === 'warn') ? 'warn' : 'ok'; };
+const ESTL = {borrador:'Borrador', lista:'Lista', enviada:'Enviada'};
 const LV = {none:'Sin recibir', ok:'Sin alertas', warn:'Revisar', bad:'Con problemas'};
 const lvChip = id => { const k = lvOf(id); return '<span class="lv ' + k + '">' + LV[k] + '</span>'; };
 
@@ -717,7 +725,8 @@ async function importText(txt){
 function resumenV(){
   const UNITS = allUnits(), N = UNITS.length; let got = 0, total = 0, late = 0, warn = 0, bad = 0;
   UNITS.forEach(u => { const x = DOCS[u.id]; if(!x) return; got++; total += x.d.tot || 0; if(x.late) late++; const l = lvOf(u.id); if(l === 'bad') bad++; else if(l === 'warn') warn++; });
-  const tiles = [[got + '<small> / ' + N + '</small>', 'Recibidas', 'var(--teal)'], [got - warn - bad, 'Sin alertas', 'var(--good)'], [warn, 'Para revisar', 'var(--warn)'], [bad, 'Con problemas', 'var(--bad)'], [cop(total), 'Comprometido', 'var(--ink)']];
+  const sentN = UNITS.filter(u => DOCS[u.id] && DOCS[u.id].estado === 'enviada').length;
+  const tiles = [[got + '<small> / ' + N + '</small>', API ? 'Con avance' : 'Recibidas', 'var(--teal)']].concat(API ? [[sentN + '<small> / ' + N + '</small>', 'Enviadas', 'var(--navy)']] : []).concat([ [got - warn - bad, 'Sin alertas', 'var(--good)'], [warn, 'Para revisar', 'var(--warn)'], [bad, 'Con problemas', 'var(--bad)'], [cop(total), 'Comprometido', 'var(--ink)']]);
   const teams = [1,2,3,4,5].map(t => { const us = unitsFor(t), g = us.filter(u => DOCS[u.id]).length; return '<div class="tb"><b>E' + t + '</b><div class="t"><i style="width:' + (g / us.length * 100) + '%"></i></div><small>' + g + ' de ' + us.length + '</small></div>'; }).join('');
   let rows = '', lastDay = '';
   const minStart = s => Math.min(...Object.values(s.a).map(x => (x.win || s.win)[0]));
@@ -726,7 +735,7 @@ function resumenV(){
     rows += '<tr><th class="row" scope="row">' + esc(sp.title) + '<small>' + esc(sp.hora) + '</small></th>' + [1,2,3,4,5].map(t => {
       const a = sp.a[t]; if(!a) return '<td><span class="na">' + ((sp.logi || []).includes(t) ? 'Logística' : '—') + '</span></td>';
       const id = 't' + t + '-' + sp.id, k = lvOf(id), x = DOCS[id];
-      return '<td><button class="cell ' + k + '" data-act="avopen" data-id="' + id + '" aria-label="Equipo ' + t + ', ' + esc(sp.title) + ': ' + LV[k] + '"><b>' + FN[a.fn].n + (a.turno ? ' T' + a.turno : '') + '</b><span>' + (x ? LV[k] + (x.late ? ' · tarde' : '') : 'Sin recibir') + '</span>' + (x ? '<span>' + cop(x.d.tot) + '</span>' : '') + '</button></td>';
+      return '<td><button class="cell ' + k + '" data-act="avopen" data-id="' + id + '" aria-label="Equipo ' + t + ', ' + esc(sp.title) + ': ' + LV[k] + '"><b>' + FN[a.fn].n + (a.turno ? ' T' + a.turno : '') + '</b><span>' + (x ? (x.estado ? ESTL[x.estado] + ' · ' : '') + LV[k] + (x.late ? ' · tarde' : '') : 'Sin empezar') + '</span>' + (x ? '<span>' + cop(x.d.tot) + '</span>' : '') + '</button></td>';
     }).join('') + '</tr>';
   });
   return (!got && !AV.demo ? '<div class="empty" style="margin-top:18px">Aún no hay propuestas aquí. Las que envíes tú aparecen solas. Para traer las que te mandan por WhatsApp, ve a <b>Traer</b> y pega los mensajes. <button class="btn go sm" data-act="avdemo" style="margin-top:10px">Ver datos de ejemplo</button></div>' : '') +
@@ -792,6 +801,7 @@ function allV(){
   const views = {resumen:resumenV, comparar:compararV, compras:comprasV, importar:importarV};
   const tabs = [['resumen', 'Resumen'], ['comparar', 'Comparar'], ['compras', 'Compras'], ['importar', 'Traer']];
   return '<main class="av">' + topbar('<button class="switch" data-act="avback">← Volver</button>') + '<div class="wrap avw"><header class="ahead"><span class="pill wide" style="display:inline-block;padding:10px 24px 9px;font-size:15px">Revisión</span><h1 class="disp">Propuestas recibidas</h1>' +
+    (API && !AV.demo ? '<div class="livebar"><span>' + (LIVE.err ? 'No pude leer la hoja. Reintento en 30 s.' : LIVE.at ? 'En vivo · actualizado ' + new Date(LIVE.at).toLocaleTimeString('es-CO', {hour:'numeric', minute:'2-digit'}) : 'Cargando propuestas…') + '</span><button class="btn alt sm" data-act="avrefresh">Actualizar</button></div>' : '') +
     (AV.demo ? '<div class="empty" style="margin-top:14px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap"><span>Datos de ejemplo. Nada se guarda.</span><button class="btn sm" data-act="avdemooff">Salir del ejemplo</button></div>' : '') +
     '</header><div class="atabs" role="tablist">' + tabs.map(t => '<button role="tab" data-act="avtab" data-v="' + t[0] + '" aria-selected="' + (AV.tab === t[0]) + '">' + t[1] + '</button>').join('') + '</div>' + views[AV.tab]() + '</div>' +
     '<div class="foot">' + bar() + '<p class="credit">Vista de revisión</p></div></main>';
@@ -853,6 +863,65 @@ function demoDocs(){
   return o;
 }
 
+
+/* ---------- guardado en línea (Google Sheets vía Apps Script) ---------- */
+const API = ''.indexOf('http') === 0 ? '' : '';
+const SYNC = {q:{}, t:null, state:'', last:0};
+function payloadFor(id){
+  const info = unitInfo(id), D = ST.drafts[id]; if(!info || !D) return null;
+  const v = validate(D, info.sp, info.a), sent = ST.sent[id], ts = D.ut || Date.now();
+  const estado = sent && !D.dirty ? 'enviada' : (v.E.length ? 'borrador' : 'lista');
+  const rev = sent ? sent.rev : 0;
+  const p = (sent && !D.dirty && sent.p) ? sent.p : buildP(id, D, v, rev, ts);
+  return {id, t:info.team, ld:TEAMS[info.team].lider, dia:DAYS[dayIdx(info.sp.day)].long, sn:info.sp.title, fn:FN[info.a.fn].n, turno:info.a.turno || 0,
+    estado, rev, ts, sentTs:sent ? sent.ts : 0, late:sent ? (sent.p && sent.p.late) : 0, p, d:D};
+}
+function setSync(st){ SYNC.state = st; document.querySelectorAll('[data-sync]').forEach(el => { el.textContent = syncText(); el.className = 'sync ' + st; }); }
+function syncText(){ return !API ? '' : SYNC.state === 'ok' ? 'Guardado en línea' : SYNC.state === 'wait' ? 'Guardando…' : SYNC.state === 'err' ? 'Sin conexión: guardado en el celular, se sube después' : ''; }
+function queueSave(id, now){
+  if(!API || !id) return; SYNC.q[id] = 1; setSync('wait'); clearTimeout(SYNC.t); SYNC.t = setTimeout(flush, now ? 0 : 1500);
+}
+let flushing = false;
+async function flush(){
+  if(!API || flushing) return; const ids = Object.keys(SYNC.q); if(!ids.length) return;
+  flushing = true; SYNC.q = {};
+  const items = ids.map(payloadFor).filter(Boolean);
+  try {
+    const r = await fetch(API, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify({items})});
+    const j = await r.json(); if(!j.ok) throw new Error(j.error);
+    SYNC.last = Date.now(); setSync('ok');
+  } catch(e) { ids.forEach(id => { SYNC.q[id] = 1; }); setSync('err'); clearTimeout(SYNC.t); SYNC.t = setTimeout(flush, 15000); }
+  flushing = false; if(Object.keys(SYNC.q).length && SYNC.state !== 'err') flush();
+}
+window.addEventListener('online', () => flush());
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'hidden') flush(); });
+async function fetchRows(t){
+  const r = await fetch(API + (t ? '?t=' + t : ''), {cache:'no-store'}); const j = await r.json(); if(!j.ok) throw new Error('api'); return j.rows || [];
+}
+async function pullTeam(t){
+  if(!API) return;
+  try {
+    const rows = await fetchRows(t); let changed = false;
+    rows.forEach(r => {
+      if(!r.d || !unitInfo(r.id)) return; const L0 = ST.drafts[r.id];
+      if(L0 && (L0.ut || 0) >= r.ts) return;
+      ST.drafts[r.id] = Object.assign(r.d, {ut:r.ts}); changed = true;
+      if(r.estado === 'enviada' && r.p) ST.sent[r.id] = {rev:r.rev, ts:r.p.ts, code:'', total:r.p.tot, p:r.p};
+    });
+    const pend = Object.keys(ST.drafts).filter(id => unitInfo(id) && unitInfo(id).team === t && !rows.some(r => r.id === id && r.ts >= (ST.drafts[id].ut || 0)));
+    pend.forEach(id => { SYNC.q[id] = 1; }); if(pend.length) flush();
+    if(changed){ saveST(true); if(view.n === 'team') show(view, true); }
+    setSync('ok');
+  } catch(e) { setSync('err'); }
+}
+const LIVE = {rows:null, at:0, err:false, timer:null};
+async function pullAll(){
+  if(!API) return;
+  try { LIVE.rows = await fetchRows(); LIVE.at = Date.now(); LIVE.err = false; } catch(e) { LIVE.err = true; }
+  if(view.n === 'all' || view.n === 'detail'){ const a = document.activeElement; if(!(a && a.id === 'impTxt')) show(view, true); }
+}
+function liveLoop(on){ clearInterval(LIVE.timer); if(on && API){ LIVE.timer = setInterval(pullAll, 30000); } }
+
 /* ---------- interacción ---------- */
 function show(v, keep){ const y = window.scrollY; view = v; app.innerHTML = view.n === 'home' ? homeV() : view.n === 'team' ? teamV() : view.n === 'all' ? allV() : view.n === 'detail' ? detailV(view.id) : fichaV(); window.scrollTo(0, keep ? y : 0); }
 function setPath(o, path, val){ const k = path.split('.'); let c = o; for(let i = 0; i < k.length - 1; i++) c = c[k[i]]; c[k[k.length - 1]] = val; }
@@ -865,7 +934,7 @@ function onField(e){
   const el = e.target.closest('[data-f]'); if(!el || view.n !== 'ficha') return;
   const D = ST.drafts[view.u]; if(!D) return;
   const val = el.type === 'checkbox' ? (el.checked ? 1 : 0) : el.value;
-  setPath(D, el.dataset.f, val); D.dirty = true; saveST();
+  setPath(D, el.dataset.f, val); D.dirty = true; D.ut = Date.now(); saveST(); queueSave(view.u);
   if(el.dataset.f === 'sinMat'){ D.sinMat = !!val; show(view, true); return; }
   if(/^ma\.\d+\.s$/.test(el.dataset.f)){ const i = el.dataset.f.split('.')[1]; if(val === 'T') D.ma[i].u = ''; show(view, true); return; }
   liveUpdate();
@@ -907,26 +976,27 @@ async function sendTeam(){
     const prev = ST.sent[u.id];
     if(prev && !D.dirty && prev.p){ ps.push(prev.p); return; }
     const rev = (prev ? prev.rev : 0) + 1, P = buildP(u.id, D, v, rev, ts);
-    ST.sent[u.id] = {rev, ts, code:'', total:v.total, p:P}; D.dirty = false; ps.push(P);
+    ST.sent[u.id] = {rev, ts, code:'', total:v.total, p:P}; D.dirty = false; D.ut = ts; ps.push(P); SYNC.q[u.id] = 1;
   });
   const code = await pack({k:'pp', t, ld:TEAMS[t].lider, ts, ps}, 'CHO');
-  saveST(true); show(view, true);
+  saveST(true); show(view, true); if(API) flush();
   const pend = R.missing.concat(R.none.map(u => ({u}))).map(x => x.u.sp.title + (x.u.a.turno ? ' (turno ' + x.u.a.turno + ')' : ''));
   const text = 'PROPUESTAS · Equipo ' + t + ' · ' + ps.length + ' de ' + unitsFor(t).length + ' espacios\nLíder: ' + TEAMS[t].lider + '\n' + code;
   sheet('Equipo listo', text, {note: 'Un solo mensaje con ' + ps.length + (ps.length === 1 ? ' propuesta' : ' propuestas') + '. Pégalo en tu chat de WhatsApp con Mateo.' + (pend.length ? ' Faltan por completar: ' + pend.join(', ') + '. Cuando las termines, vuelve a tocar Enviar y manda el mensaje nuevo: reemplaza al anterior.' : '')});
 }
 app.addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if(!b) return; const act = b.dataset.act;
-  if(act === 'team'){ ST.team = +b.dataset.t; saveST(true); show({n:'team'}); }
+  if(act === 'team'){ ST.team = +b.dataset.t; saveST(true); show({n:'team'}); pullTeam(ST.team); }
   else if(act === 'home'){ ST.team = null; saveST(true); show({n:'home'}); }
   else if(act === 'tab'){ show({n:'team', tab:b.dataset.k}, true); }
   else if(act === 'open'){ show({n:'ficha', u:b.dataset.u, tab:view.tab}); }
   else if(act === 'back'){ show({n:'team', tab:unitInfo(view.u) ? unitInfo(view.u).sp.day : view.tab}); }
-  else if(act === 'add'){ const D = ST.drafts[view.u], l = b.dataset.list; D[l].push(l === 'mm' ? {a:'',b:'',q:'',p:''} : l === 'pe' ? {p:'',r:''} : {i:'',c:'',t:'',u:'',s:'',re:0}); D.dirty = true; saveST(); show(view, true); }
-  else if(act === 'del'){ const D = ST.drafts[view.u]; D[b.dataset.list].splice(+b.dataset.i, 1); D.dirty = true; saveST(); show(view, true); }
+  else if(act === 'add'){ const D = ST.drafts[view.u], l = b.dataset.list; D[l].push(l === 'mm' ? {a:'',b:'',q:'',p:''} : l === 'pe' ? {p:'',r:''} : {i:'',c:'',t:'',u:'',s:'',re:0}); D.dirty = true; D.ut = Date.now(); saveST(); queueSave(view.u); show(view, true); }
+  else if(act === 'del'){ const D = ST.drafts[view.u]; D[b.dataset.list].splice(+b.dataset.i, 1); D.dirty = true; D.ut = Date.now(); saveST(); queueSave(view.u); show(view, true); }
   else if(act === 'sendteam'){ b.disabled = true; await sendTeam(); b.disabled = false; }
-  else if(act === 'allopen'){ AV.demo = false; show({n:'all'}); }
-  else if(act === 'avback'){ show(ST.team && TEAMS[ST.team] ? {n:'team'} : {n:'home'}); }
+  else if(act === 'allopen'){ AV.demo = false; show({n:'all'}); liveLoop(true); pullAll(); }
+  else if(act === 'avrefresh'){ pullAll(); }
+  else if(act === 'avback'){ liveLoop(false); show(ST.team && TEAMS[ST.team] ? {n:'team'} : {n:'home'}); }
   else if(act === 'avtab'){ AV.tab = b.dataset.v; show({n:'all'}); }
   else if(act === 'avspace'){ AV.space = b.dataset.s; show({n:'all'}, true); }
   else if(act === 'avopen'){ show({n:'detail', id:b.dataset.id}); }
@@ -949,6 +1019,7 @@ app.addEventListener('input', onField);
 app.addEventListener('change', onField);
 
 show(ST.team && TEAMS[ST.team] ? {n:'team'} : {n:'home'});
+if(ST.team && TEAMS[ST.team]) pullTeam(ST.team);
 </script>
 </body>
 </html>
