@@ -680,7 +680,6 @@ function allRows(except){
 function alertsFor(id){
   const x = DOCS[id], info = unitInfo(id), P = x.d, out = []; if(!info) return out;
   const v = validate(P, info.sp, info.a);
-  if(x.late) out.push(['bad', 'Tardía', 'Llegó el ' + when(x.ts) + ', después del cierre del lunes 9 a las 12:00 a. m.']);
   v.E.forEach(e => out.push(['bad', 'Falta o no cuadra', e]));
   v.W.forEach(w => out.push(['warn', 'Tiempo', w]));
   if(v.total > TOPE_MAX) out.push(['bad', 'Costo', 'Supera el tope de ' + cop(TOPE_MAX) + ' (' + cop(v.total) + ').']);
@@ -715,7 +714,7 @@ async function importText(txt){
         if(P.k !== 'p' || !unitInfo(id)) throw new Error('forma');
         const ex = ST.pool[id] || DOCS[id];
         if(ex && (ex.rev > P.rev || (ex.rev === P.rev && ex.ts >= P.ts))){ res.push({id, st:'dup', rev:P.rev}); return; }
-        ST.pool[id] = {t:P.t, u:P.u, rev:P.rev, ts:P.ts, recv:Date.now(), late:P.ts > DEADLINE ? 1 : 0, d:P};
+        ST.pool[id] = {t:P.t, u:P.u, rev:P.rev, ts:P.ts, recv:Date.now(), late:0, d:P};
         res.push({id, st:ex ? 'upd' : 'new', rev:P.rev});
       } catch(e) { res.push({st:'bad'}); }
     });
@@ -726,7 +725,7 @@ async function importText(txt){
 function resumenV(){
   const UNITS = allUnits(), N = UNITS.length; let got = 0, total = 0, late = 0, warn = 0, bad = 0;
   UNITS.forEach(u => { const x = DOCS[u.id]; if(!x) return; got++; total += x.d.tot || 0; if(x.late) late++; const l = lvOf(u.id); if(l === 'bad') bad++; else if(l === 'warn') warn++; });
-  const tiles = [[got + '<small> / ' + N + '</small>', 'Recibidas', 'var(--teal)'], [got - warn - bad, 'Sin alertas', 'var(--good)'], [warn, 'Para revisar', 'var(--warn)'], [bad, 'Con problemas', 'var(--bad)'], [cop(total), 'Comprometido', 'var(--ink)'], [late, 'Tardías', 'var(--red)']];
+  const tiles = [[got + '<small> / ' + N + '</small>', 'Recibidas', 'var(--teal)'], [got - warn - bad, 'Sin alertas', 'var(--good)'], [warn, 'Para revisar', 'var(--warn)'], [bad, 'Con problemas', 'var(--bad)'], [cop(total), 'Comprometido', 'var(--ink)']];
   const teams = [1,2,3,4,5].map(t => { const us = unitsFor(t), g = us.filter(u => DOCS[u.id]).length; return '<div class="tb"><b>E' + t + '</b><div class="t"><i style="width:' + (g / us.length * 100) + '%"></i></div><small>' + g + ' de ' + us.length + '</small></div>'; }).join('');
   let rows = '', lastDay = '';
   const minStart = s => Math.min(...Object.values(s.a).map(x => (x.win || s.win)[0]));
@@ -901,7 +900,7 @@ function buildP(id, D, v, rev, ts){
     mm:D.mm.filter(complete).map(r => ({a:r.a, b:r.b, q:r.q.trim(), p:r.p || ''})),
     pe:D.pe.filter(r => r.p && L(r.r, 3)).map(r => ({p:r.p, r:r.r.trim()})),
     sinMat:!!D.sinMat, ma:D.sinMat ? [] : D.ma.map(r => ({i:r.i.trim(), c:num(r.c), t:r.t.trim(), u:r.s === 'T' ? 0 : num(r.u), s:r.s, re:r.re ? 1 : 0})),
-    nec:(D.nec || '').trim(), tot:v.total, cov:Math.round(v.cover * 100), late:ts > DEADLINE ? 1 : 0};
+    nec:(D.nec || '').trim(), tot:v.total, cov:Math.round(v.cover * 100), late:0};
 }
 function readiness(team){
   const out = {ready:[], missing:[], none:[]};
