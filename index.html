@@ -46,7 +46,6 @@ button{font:inherit;color:inherit;cursor:pointer}
 .steps b{font-family:var(--display);font-weight:900;font-stretch:68%;font-size:34px;line-height:1}
 .deadline{margin-top:18px;background:var(--ink);color:var(--paper);padding:14px 16px;font-weight:550;line-height:1.35}
 .deadline b{color:var(--lime);font-weight:800}
-.deadline .cd{display:block;margin-top:4px;font-family:var(--display);font-weight:900;font-stretch:68%;text-transform:uppercase;font-size:30px;line-height:1;color:var(--lime)}
 .teams{display:grid;gap:12px}
 .pickteam{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;width:100%;text-align:left;border:2px solid var(--ink);background:rgba(255,255,255,.4);padding:12px 14px;min-height:68px}
 .pickteam:hover,.pickteam:active{background:rgba(9,167,162,.18)}
@@ -502,13 +501,6 @@ function statusOf(u){
 }
 const stPill = u => { const k = statusOf(u); return '<span class="st ' + STCLS[k] + '">' + STATUS[k] + '</span>'; };
 const fnChip = (a) => { const f = FN[a.fn]; return '<span class="chip" style="--c:' + f.c + ';--f:' + f.f + '">' + f.n + (a.turno ? ' · turno ' + a.turno : '') + '</span>'; };
-function cdText(){
-  const ms = DEADLINE - Date.now();
-  if(ms <= 0) return 'Plazo cerrado';
-  const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mi = m % 60;
-  return (d ? d + ' d ' : '') + h + ' h ' + mi + ' min';
-}
-setInterval(() => document.querySelectorAll('[data-cd]').forEach(el => { el.textContent = cdText(); }), 30000);
 
 let toastT = null;
 function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2800); }
@@ -532,7 +524,7 @@ function homeV(){
     '<section class="sec"><h2 class="disp">Cómo funciona</h2><ol class="steps">' +
     '<li><b>1</b><span><strong>Prepara cada ficha.</strong> Son 8 o 9 por equipo. Se guardan solas en este celular.</span></li>' +
     '<li><b>2</b><span><strong>Envía todo el equipo</strong> con un solo código y mándaselo a Mateo por WhatsApp. Él te da su retroalimentación por ahí mismo.</span></li></ol>' +
-    '<div class="deadline">Las propuestas se reciben hasta el <b>lunes 9 de noviembre a las 12:00 a. m.</b> (medianoche del domingo 8).<span class="cd" data-cd>' + cdText() + '</span></div></section>' +
+    '<div class="deadline">Las propuestas se reciben hasta el <b>lunes 9 de noviembre a las 12:00 a. m.</b> (medianoche del domingo 8).</div></section>' +
     '<section class="sec"><h2 class="disp">¿Cuál es tu equipo?<small>Entra con el nombre de tu líder. Si no eres líder, tu líder envía por el equipo.</small></h2><div class="teams">' + teams + '</div></section>' +
     '</div><div class="foot">' + bar() + '<p class="credit">Misión Nacional Chocó · Puente Largo y New Breath</p><p class="credit"><button class="ghost" data-act="allopen">Revisión</button></p></div></main>';
 }
@@ -574,7 +566,7 @@ function teamV(){
     '<section class="progress"><h3>Tu avance</h3><div class="big-num">' + sentN + ' de ' + N + ' enviadas</div><div class="seg" style="margin-top:10px" aria-hidden="true">' +
     seg.map(s => '<i style="width:' + pct(s[0]) + ';background:' + s[1] + '"></i>').join('') + '</div><div class="legend">' +
     seg.filter(s => s[0]).map(s => '<span style="--c:' + s[1] + '">' + s[0] + ' ' + s[2].toLowerCase() + '</span>').join('') + '</div>' +
-    '<p style="margin:10px 0 0;font-size:14.5px;font-weight:600">Cierra en <span data-cd>' + cdText() + '</span> (lunes 9, 12:00 a. m.)</p></section>' +
+    '<p style="margin:10px 0 0;font-size:14.5px;font-weight:600">Entrega: lunes 9 de noviembre, 12:00 a. m.</p></section>' +
     '<details class="box"><summary>Reglas para todas las propuestas</summary><div class="in">' + rulesHTML() + '</div></details>' +
     '<section class="box plain"><h3>Enviar a Mateo</h3><p style="margin:0;font-size:14.5px">Cuando termines, envías todas tus fichas completas en <b>un solo código</b>. Tienes ' + RD.ready.length + ' de ' + N + ' listas.</p><div class="btnrow"><button class="btn go" data-act="sendteam"' + (RD.ready.length ? '' : ' disabled') + '>' + (sentN ? 'Enviar de nuevo' : 'Enviar todo el equipo') + '</button></div></section>' +
     '<section class="days"><h2 class="disp">Tus espacios por día</h2>' + tabs + '<div class="panel">' + (cards || '') + logi + (!cards && !logi ? '<div class="logi">Este día no tienes propuestas.</div>' : '') + '</div></section></div>' +
